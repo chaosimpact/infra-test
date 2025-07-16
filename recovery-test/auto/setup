@@ -1,0 +1,12 @@
+#!/bin/sh
+
+set -eu
+cd "$(dirname "$0")/.."
+
+auto/cleanup
+
+cd manifests
+kubectl apply -f 01-namespace.yaml
+kubectl apply -k .
+
+echo "✅ Setup all done!"

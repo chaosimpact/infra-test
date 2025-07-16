@@ -1,0 +1,43 @@
+#!/bin/sh
+
+set -eu
+cd "$(dirname "$0")/.."
+
+NAMESPACE="recovery-test"
+TIMEOUT=300  # 5 minutes timeout
+
+echo "Starting cleanup $NAMESPACE namespace"
+
+# Check if namespace exists first
+if ! kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; then
+    echo "Namespace $NAMESPACE does not exist, nothing to cleanup"
+    exit 0
+fi
+
+# Delete the namespace
+echo "Deleting namespace $NAMESPACE..."
+kubectl delete namespace "$NAMESPACE"
+
+# Try to use kubectl wait for watching deletion (more efficient)
+echo "Waiting for namespace deletion to complete (timeout: ${TIMEOUT}s)..."
+if kubectl wait --for=delete namespace/"$NAMESPACE" --timeout="${TIMEOUT}s" 2>/dev/null; then
+    echo "✅ Namespace $NAMESPACE successfully deleted!"
+else
+    echo "kubectl wait failed, falling back to polling method..."
+    
+    # Fallback: polling with timeout
+    elapsed=0
+    while kubectl get namespace "$NAMESPACE" >/dev/null 2>&1; do
+        if [ $elapsed -ge $TIMEOUT ]; then
+            echo "❌ Timeout: Namespace $NAMESPACE deletion did not complete within ${TIMEOUT}s"
+            echo "Please check the namespace status manually: kubectl get namespace $NAMESPACE"
+            exit 1
+        fi
+        echo "⏳ Namespace $NAMESPACE still exists, waiting... (${elapsed}s/${TIMEOUT}s)"
+        sleep 5
+        elapsed=$((elapsed + 5))
+    done
+    echo "✅ Namespace $NAMESPACE successfully deleted!"
+fi
+
+echo "✅ Cleanup all done!"
